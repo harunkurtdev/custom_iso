@@ -1,0 +1,204 @@
+#cloud-config
+# Ubuntu Server Autoinstall Configuration for PC Engines APU Board
+# Optimized for AMD GX-412TC SOC and limited RAM (2-4GB)
+
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Network configuration for APU board (3 ethernet interfaces)
+  network:
+    ethernets:
+      # LAN interface
+      enp1s0:
+        dhcp4: true
+        dhcp6: false
+      # WAN interface (optional)
+      enp2s0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+      # DMZ interface (optional)
+      enp3s0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+    version: 2
+  
+  # Storage configuration - conservative for limited storage
+  storage:
+    layout:
+      name: direct
+      # Simple partitioning for better performance on limited hardware
+    swap:
+      size: 1G  # Minimal swap for limited RAM
+  
+  # Identity configuration
+  identity:
+    hostname: apu-server
+    username: ubuntu
+    # Default password: ubuntu (change in production)
+    password: '$6$rounds=4096$saltsaltsalt$L/8dyR4tE8UM0HQh2iBANO5yTqFJCGV6.d9YKo34B/DbBJ/lJPV2/5v6v.V0.C4zKCB4TCcP3z8s3Y4d8pGR.'
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+  
+  # Minimal package selection for APU (resource constrained)
+  packages:
+    - openssh-server
+    - curl
+    - wget
+    - htop
+    - git
+    - # Network tools for router/firewall use
+    - iptables
+    - iptables-persistent
+    - bridge-utils
+    - vlan
+    - # Hardware monitoring
+    - lm-sensors
+    - # AMD-specific
+    - amd64-microcode
+    - # Minimal development tools
+    - python3-pip
+  
+  # Package updates
+  package_update: true
+  package_upgrade: false  # Skip upgrade to save time on limited hardware
+  
+  # Late commands for APU specific setup
+  late-commands:
+    # Configure serial console for APU (115200 baud)
+    - echo 'GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"' >> /target/etc/default/grub
+    - echo 'GRUB_TERMINAL="console serial"' >> /target/etc/default/grub
+    - echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /target/etc/default/grub
+    - curtin in-target --target=/target -- update-grub
+    
+    # Enable serial console getty
+    - curtin in-target --target=/target -- systemctl enable serial-getty@ttyS0.service
+    
+    # Configure sensors for APU
+    - curtin in-target --target=/target -- sensors-detect --auto
+    
+    # Set CPU governor to conservative for power saving
+    - echo 'GOVERNOR="conservative"' >> /target/etc/default/cpufrequtils
+    
+    # Create APU hardware info file
+    - echo 'Hardware: PC Engines APU Board' > /target/etc/hardware-info
+    - echo 'CPU: AMD GX-412TC SOC' >> /target/etc/hardware-info
+    - echo 'RAM: 2-4GB DDR3' >> /target/etc/hardware-info
+    - echo 'Ethernet: 3x Gigabit' >> /target/etc/hardware-info
+    - echo 'Config: apu-user-data' >> /target/etc/hardware-info
+    
+    # Configure for headless operation
+    - echo 'net.ipv4.ip_forward=1' >> /target/etc/sysctl.conf
+    
+    # Set timezone
+    - curtin in-target --target=/target -- timedatectl set-timezone UTC
+  
+  # Power management
+  power_state:
+    mode: reboot
+    message: "APU installation complete. Rebooting..."
+    delay: "+1"
+  
+  # User data for cloud-init
+  user-data:
+    timezone: UTC
+    # Minimal additional packages
+    packages:
+      - fail2ban
+      - ufw
+    # Run commands after first boot
+    runcmd:
+      # Set hostname properly
+      - hostnamectl set-hostname apu-server
+      # Configure basic firewall
+      - ufw --force enable
+      - ufw default deny incoming
+      - ufw default allow outgoing
+      - ufw allow ssh
+      # Configure fail2ban
+      - systemctl enable fail2ban
+      - systemctl start fail2ban
+      # Apply network configuration
+      - netplan apply
+    # Write files after installation
+    write_files:
+      - path: /etc/motd
+        content: |
+          
+          ████████████████████████████████████████████████████████████████████████████████
+          █                                                                              █
+          █   Welcome to Ubuntu Server on PC Engines APU Board                          █
+          █                                                                              █
+          █   Hardware: AMD GX-412TC SOC                                                █
+          █   Memory: 2-4GB DDR3                                                        █
+          █   Network: 3x Gigabit Ethernet                                             █
+          █   Serial: 115200 baud on ttyS0                                             █
+          █                                                                              █
+          █   This system was configured for router/firewall use.                       █
+          █   Hardware info available at: /etc/hardware-info                           █
+          █                                                                              █
+          ████████████████████████████████████████████████████████████████████████████████
+          
+        permissions: '0644'
+      - path: /home/ubuntu/apu-setup.sh
+        content: |
+          #!/bin/bash
+          # APU Board specific setup script for router/firewall
+          echo "Setting up PC Engines APU Board for router use..."
+          
+          # Configure network interfaces for router use
+          sudo tee /etc/netplan/60-apu-router.yaml << 'EOF'
+          network:
+            version: 2
+            ethernets:
+              enp1s0:  # LAN
+                dhcp4: false
+                addresses: [192.168.1.1/24]
+              enp2s0:  # WAN
+                dhcp4: true
+              enp3s0:  # DMZ (optional)
+                dhcp4: false
+                addresses: [192.168.100.1/24]
+                optional: true
+          EOF
+          
+          # Install router/firewall tools
+          sudo apt-get update
+          sudo apt-get install -y dnsmasq hostapd iptables-persistent
+          
+          # Basic DHCP server configuration
+          sudo tee /etc/dnsmasq.conf << 'EOF'
+          interface=enp1s0
+          dhcp-range=192.168.1.100,192.168.1.200,255.255.255.0,12h
+          dhcp-option=3,192.168.1.1
+          dhcp-option=6,8.8.8.8,8.8.4.4
+          EOF
+          
+          echo "APU router setup complete!"
+          echo "Manual configuration required for routing and firewall rules."
+        permissions: '0755'
+        owner: ubuntu:ubuntu
+      - path: /etc/systemd/system/apu-watchdog.service
+        content: |
+          [Unit]
+          Description=APU Hardware Watchdog
+          After=multi-user.target
+          
+          [Service]
+          Type=simple
+          ExecStart=/bin/bash -c 'echo 1 > /sys/class/watchdog/watchdog0/nowayout'
+          ExecStart=/bin/bash -c 'echo 30 > /sys/class/watchdog/watchdog0/timeout'
+          ExecStart=/bin/bash -c 'echo A > /dev/watchdog0'
+          Restart=always
+          
+          [Install]
+          WantedBy=multi-user.target
+        permissions: '0644'

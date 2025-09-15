@@ -1,0 +1,35 @@
+# ISO files and build artifacts
+*.iso
+*.img
+downloads/
+build/
+mnt/
+tmp/
+
+# Docker artifacts
+.dockerignore
+
+# USB device detection
+/dev/
+/sys/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Config overrides
+local.conf

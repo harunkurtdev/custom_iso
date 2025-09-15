@@ -1,0 +1,165 @@
+#cloud-config
+# Ubuntu Server Autoinstall Configuration for Intel UP² Board
+# Optimized for Intel Atom x7-E3950 processor and 8GB RAM
+
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Network configuration for UP² board
+  network:
+    ethernets:
+      # Primary ethernet interface
+      enp1s0:
+        dhcp4: true
+        dhcp6: false
+      # Secondary ethernet interface (if available)
+      enp2s0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+    version: 2
+  
+  # Storage configuration - optimized for eMMC/SSD
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: scaled
+      reset-partition-size: true
+    swap:
+      size: 2G  # Reasonable swap for 8GB RAM
+  
+  # Identity configuration
+  identity:
+    hostname: up2-server
+    username: ubuntu
+    # Default password: ubuntu (change in production)
+    password: '$6$rounds=4096$saltsaltsalt$L/8dyR4tE8UM0HQh2iBANO5yTqFJCGV6.d9YKo34B/DbBJ/lJPV2/5v6v.V0.C4zKCB4TCcP3z8s3Y4d8pGR.'
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+  
+  # Package selection for UP² board
+  packages:
+    - openssh-server
+    - curl
+    - wget
+    - htop
+    - git
+    - build-essential
+    - linux-headers-generic
+    - # Hardware monitoring tools
+    - lm-sensors
+    - i2c-tools
+    - # Intel-specific tools
+    - intel-microcode
+    - thermald
+    - # Network tools
+    - net-tools
+    - iperf3
+    - # Development tools
+    - python3-pip
+    - nodejs
+    - npm
+  
+  # Package updates
+  package_update: true
+  package_upgrade: true
+  
+  # Late commands for UP² specific setup
+  late-commands:
+    # Enable I2C interfaces for GPIO access
+    - echo 'dtparam=i2c1=on' >> /target/boot/firmware/config.txt
+    - echo 'dtparam=spi=on' >> /target/boot/firmware/config.txt
+    
+    # Install UP² board GPIO library
+    - curtin in-target --target=/target -- pip3 install pyserial gpiozero
+    
+    # Configure thermal management for Intel Atom
+    - curtin in-target --target=/target -- systemctl enable thermald
+    
+    # Set CPU governor to performance for better responsiveness
+    - echo 'GOVERNOR="performance"' >> /target/etc/default/cpufrequtils
+    
+    # Configure sensors
+    - curtin in-target --target=/target -- sensors-detect --auto
+    
+    # Create UP² hardware info file
+    - echo 'Hardware: Intel UP² Board' > /target/etc/hardware-info
+    - echo 'CPU: Intel Atom x7-E3950' >> /target/etc/hardware-info
+    - echo 'RAM: 8GB LPDDR4' >> /target/etc/hardware-info
+    - echo 'Config: up2-user-data' >> /target/etc/hardware-info
+    
+    # Set timezone
+    - curtin in-target --target=/target -- timedatectl set-timezone UTC
+    
+    # Enable auto-login on serial console (useful for debugging)
+    - mkdir -p /target/etc/systemd/system/serial-getty@ttyS0.service.d
+    - echo '[Service]' > /target/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
+    - echo 'ExecStart=' >> /target/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
+    - echo 'ExecStart=-/sbin/agetty --autologin ubuntu --noclear %I $TERM' >> /target/etc/systemd/system/serial-getty@ttyS0.service.d/autologin.conf
+  
+  # Power management for embedded system
+  power_state:
+    mode: reboot
+    message: "System installation complete. Rebooting..."
+    delay: "+1"
+  
+  # User data for cloud-init
+  user-data:
+    timezone: UTC
+    # Additional packages to install after first boot
+    packages:
+      - docker.io
+      - docker-compose
+    # Run commands after first boot
+    runcmd:
+      - systemctl enable docker
+      - systemctl start docker
+      - usermod -aG docker ubuntu
+      # Set hostname properly
+      - hostnamectl set-hostname up2-server
+      # Configure network interfaces
+      - netplan apply
+    # Write files after installation
+    write_files:
+      - path: /etc/motd
+        content: |
+          
+          ████████████████████████████████████████████████████████████████████████████████
+          █                                                                              █
+          █   Welcome to Ubuntu Server on Intel UP² Board                               █
+          █                                                                              █
+          █   Hardware: Intel Atom x7-E3950 Quad-core 1.6GHz                          █
+          █   Memory: 8GB LPDDR4                                                        █
+          █   Storage: eMMC/SSD with LVM                                                █
+          █                                                                              █
+          █   This system was configured with automated installation.                   █
+          █   Hardware info available at: /etc/hardware-info                           █
+          █                                                                              █
+          ████████████████████████████████████████████████████████████████████████████████
+          
+        permissions: '0644'
+      - path: /home/ubuntu/up2-setup.sh
+        content: |
+          #!/bin/bash
+          # UP² Board specific setup script
+          echo "Setting up Intel UP² Board..."
+          
+          # Install UP² specific libraries
+          sudo apt-get update
+          sudo apt-get install -y python3-mraa python3-upm
+          
+          # Configure GPIO access for ubuntu user
+          sudo usermod -a -G gpio ubuntu
+          sudo usermod -a -G i2c ubuntu
+          sudo usermod -a -G spi ubuntu
+          
+          echo "UP² Board setup complete!"
+        permissions: '0755'
+        owner: ubuntu:ubuntu

@@ -1,0 +1,290 @@
+#cloud-config
+# Ubuntu Server Autoinstall Configuration for PC Engines APU2 Board
+# Optimized for AMD GX-412TC SOC and improved features over APU1
+
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Network configuration for APU2 board (3 ethernet interfaces + wifi)
+  network:
+    ethernets:
+      # LAN interface
+      enp1s0:
+        dhcp4: true
+        dhcp6: false
+      # WAN interface
+      enp2s0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+      # DMZ interface
+      enp3s0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+    # WiFi configuration (if mPCIe WiFi card is installed)
+    wifis:
+      wlan0:
+        optional: true
+        dhcp4: true
+        access-points: {}
+    version: 2
+  
+  # Storage configuration - improved for APU2's better I/O
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: scaled
+    swap:
+      size: 2G  # More swap for APU2's 4GB RAM
+  
+  # Identity configuration
+  identity:
+    hostname: apu2-server
+    username: ubuntu
+    # Default password: ubuntu (change in production)
+    password: '$6$rounds=4096$saltsaltsalt$L/8dyR4tE8UM0HQh2iBANO5yTqFJCGV6.d9YKo34B/DbBJ/lJPV2/5v6v.V0.C4zKCB4TCcP3z8s3Y4d8pGR.'
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+  
+  # Package selection for APU2 board
+  packages:
+    - openssh-server
+    - curl
+    - wget
+    - htop
+    - git
+    - build-essential
+    - # Network and security tools
+    - iptables
+    - iptables-persistent
+    - bridge-utils
+    - vlan
+    - openvpn
+    - strongswan
+    - # Hardware monitoring
+    - lm-sensors
+    - i2c-tools
+    - # AMD-specific
+    - amd64-microcode
+    - # Development tools
+    - python3-pip
+    - nodejs
+    - npm
+    - # WiFi tools (if WiFi card present)
+    - wireless-tools
+    - wpasupplicant
+    - hostapd
+  
+  # Package updates
+  package_update: true
+  package_upgrade: true
+  
+  # Late commands for APU2 specific setup
+  late-commands:
+    # Configure serial console for APU2 (115200 baud)
+    - echo 'GRUB_CMDLINE_LINUX="console=tty0 console=ttyS0,115200n8"' >> /target/etc/default/grub
+    - echo 'GRUB_TERMINAL="console serial"' >> /target/etc/default/grub
+    - echo 'GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"' >> /target/etc/default/grub
+    - curtin in-target --target=/target -- update-grub
+    
+    # Enable serial console getty
+    - curtin in-target --target=/target -- systemctl enable serial-getty@ttyS0.service
+    
+    # Configure I2C for GPIO access
+    - echo 'i2c-dev' >> /target/etc/modules
+    - echo 'i2c-piix4' >> /target/etc/modules
+    
+    # Configure sensors for APU2
+    - curtin in-target --target=/target -- sensors-detect --auto
+    
+    # Set CPU governor to ondemand for balanced performance
+    - echo 'GOVERNOR="ondemand"' >> /target/etc/default/cpufrequtils
+    
+    # Create APU2 hardware info file
+    - echo 'Hardware: PC Engines APU2 Board' > /target/etc/hardware-info
+    - echo 'CPU: AMD GX-412TC SOC (improved)' >> /target/etc/hardware-info
+    - echo 'RAM: 4GB DDR3' >> /target/etc/hardware-info
+    - echo 'Ethernet: 3x Gigabit' >> /target/etc/hardware-info
+    - echo 'WiFi: mPCIe slot available' >> /target/etc/hardware-info
+    - echo 'GPIO: I2C accessible' >> /target/etc/hardware-info
+    - echo 'Config: apu2-user-data' >> /target/etc/hardware-info
+    
+    # Configure for routing/firewall operation
+    - echo 'net.ipv4.ip_forward=1' >> /target/etc/sysctl.conf
+    - echo 'net.ipv6.conf.all.forwarding=1' >> /target/etc/sysctl.conf
+    
+    # Set timezone
+    - curtin in-target --target=/target -- timedatectl set-timezone UTC
+    
+    # Configure hardware watchdog
+    - echo 'sp5100_tco' >> /target/etc/modules
+  
+  # Power management
+  power_state:
+    mode: reboot
+    message: "APU2 installation complete. Rebooting..."
+    delay: "+1"
+  
+  # User data for cloud-init
+  user-data:
+    timezone: UTC
+    # Additional packages for APU2
+    packages:
+      - docker.io
+      - fail2ban
+      - ufw
+      - prometheus-node-exporter
+    # Run commands after first boot
+    runcmd:
+      # Set hostname properly
+      - hostnamectl set-hostname apu2-server
+      # Configure firewall
+      - ufw --force enable
+      - ufw default deny incoming
+      - ufw default allow outgoing
+      - ufw allow ssh
+      - ufw allow 9100  # Prometheus node exporter
+      # Configure fail2ban
+      - systemctl enable fail2ban
+      - systemctl start fail2ban
+      # Enable Docker
+      - systemctl enable docker
+      - systemctl start docker
+      - usermod -aG docker ubuntu
+      # Enable hardware monitoring
+      - systemctl enable prometheus-node-exporter
+      - systemctl start prometheus-node-exporter
+      # Apply network configuration
+      - netplan apply
+    # Write files after installation
+    write_files:
+      - path: /etc/motd
+        content: |
+          
+          ████████████████████████████████████████████████████████████████████████████████
+          █                                                                              █
+          █   Welcome to Ubuntu Server on PC Engines APU2 Board                         █
+          █                                                                              █
+          █   Hardware: AMD GX-412TC SOC (Enhanced)                                     █
+          █   Memory: 4GB DDR3                                                          █
+          █   Network: 3x Gigabit Ethernet + WiFi capable                              █
+          █   Serial: 115200 baud on ttyS0                                             █
+          █   Features: Hardware watchdog, GPIO, I2C                                    █
+          █                                                                              █
+          █   This system was configured for advanced routing/firewall use.            █
+          █   Hardware info available at: /etc/hardware-info                           █
+          █   Node exporter running on port 9100                                       █
+          █                                                                              █
+          ████████████████████████████████████████████████████████████████████████████████
+          
+        permissions: '0644'
+      - path: /home/ubuntu/apu2-setup.sh
+        content: |
+          #!/bin/bash
+          # APU2 Board specific setup script for advanced networking
+          echo "Setting up PC Engines APU2 Board for advanced networking..."
+          
+          # Configure network interfaces for advanced router use
+          sudo tee /etc/netplan/60-apu2-router.yaml << 'EOF'
+          network:
+            version: 2
+            ethernets:
+              enp1s0:  # LAN
+                dhcp4: false
+                addresses: [192.168.1.1/24]
+              enp2s0:  # WAN
+                dhcp4: true
+              enp3s0:  # DMZ
+                dhcp4: false
+                addresses: [192.168.100.1/24]
+                optional: true
+            # WiFi configuration template (uncomment if WiFi card present)
+            # wifis:
+            #   wlan0:
+            #     access-points:
+            #       "YourWiFiSSID":
+            #         password: "YourWiFiPassword"
+            #     dhcp4: false
+            #     addresses: [192.168.10.1/24]
+          EOF
+          
+          # Install advanced networking tools
+          sudo apt-get update
+          sudo apt-get install -y \
+            dnsmasq \
+            bind9 \
+            bird2 \
+            frr \
+            nftables \
+            wireguard \
+            haproxy \
+            prometheus \
+            grafana
+          
+          # Configure DHCP server
+          sudo tee /etc/dnsmasq.d/apu2.conf << 'EOF'
+          # LAN interface DHCP
+          interface=enp1s0
+          dhcp-range=192.168.1.100,192.168.1.200,255.255.255.0,12h
+          dhcp-option=3,192.168.1.1
+          dhcp-option=6,8.8.8.8,1.1.1.1
+          
+          # DMZ interface DHCP
+          interface=enp3s0
+          dhcp-range=192.168.100.100,192.168.100.150,255.255.255.0,12h
+          dhcp-option=3,192.168.100.1
+          dhcp-option=6,8.8.8.8,1.1.1.1
+          EOF
+          
+          # Configure GPIO access for ubuntu user
+          sudo usermod -a -G i2c ubuntu
+          sudo usermod -a -G gpio ubuntu
+          
+          echo "APU2 advanced networking setup complete!"
+          echo "Additional configuration available for:"
+          echo "  - VPN server (WireGuard/OpenVPN)"
+          echo "  - Load balancing (HAProxy)"
+          echo "  - Monitoring (Prometheus/Grafana)"
+          echo "  - BGP routing (FRR)"
+        permissions: '0755'
+        owner: ubuntu:ubuntu
+      - path: /etc/systemd/system/apu2-monitoring.service
+        content: |
+          [Unit]
+          Description=APU2 Hardware Monitoring
+          After=multi-user.target
+          
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/python3 -c "
+          import time
+          import subprocess
+          import os
+          
+          while True:
+              try:
+                  # Read CPU temperature
+                  temp = subprocess.check_output(['sensors', '-u']).decode()
+                  # Read load average
+                  load = os.getloadavg()
+                  # Log to system journal
+                  subprocess.run(['logger', f'APU2-Monitor: Load={load[0]:.2f}'])
+                  time.sleep(60)
+              except Exception as e:
+                  subprocess.run(['logger', f'APU2-Monitor: Error={e}'])
+                  time.sleep(60)
+          "
+          Restart=always
+          User=ubuntu
+          
+          [Install]
+          WantedBy=multi-user.target
+        permissions: '0644'

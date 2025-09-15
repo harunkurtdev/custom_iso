@@ -1,0 +1,106 @@
+#cloud-config
+# Ubuntu Server Autoinstall Configuration - Default Template
+# Generic configuration suitable for most hardware
+
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  # Generic network configuration
+  network:
+    ethernets:
+      # Try common interface names
+      eth0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+      enp0s3:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+      enp1s0:
+        dhcp4: true
+        dhcp6: false
+        optional: true
+    version: 2
+  
+  # Storage configuration
+  storage:
+    layout:
+      name: lvm
+      sizing-policy: all
+    swap:
+      size: 2G
+  
+  # Identity configuration
+  identity:
+    hostname: ubuntu-server
+    username: ubuntu
+    # Default password: ubuntu (change in production)
+    password: '$6$rounds=4096$saltsaltsalt$L/8dyR4tE8UM0HQh2iBANO5yTqFJCGV6.d9YKo34B/DbBJ/lJPV2/5v6v.V0.C4zKCB4TCcP3z8s3Y4d8pGR.'
+  
+  # SSH configuration
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys: []
+  
+  # Base package selection
+  packages:
+    - openssh-server
+    - curl
+    - wget
+    - htop
+    - git
+    - vim
+    - net-tools
+    - build-essential
+  
+  # Package updates
+  package_update: true
+  package_upgrade: true
+  
+  # Late commands
+  late-commands:
+    # Create hardware info file
+    - echo 'Hardware: Generic' > /target/etc/hardware-info
+    - echo 'Config: default-user-data' >> /target/etc/hardware-info
+    - echo "Installation Date: $(date)" >> /target/etc/hardware-info
+    
+    # Set timezone
+    - curtin in-target --target=/target -- timedatectl set-timezone UTC
+  
+  # Power management
+  power_state:
+    mode: reboot
+    message: "Installation complete. Rebooting..."
+    delay: "+1"
+  
+  # User data for cloud-init
+  user-data:
+    timezone: UTC
+    runcmd:
+      # Set hostname properly
+      - hostnamectl set-hostname ubuntu-server
+      # Apply network configuration
+      - netplan apply
+    # Write files after installation
+    write_files:
+      - path: /etc/motd
+        content: |
+          
+          ████████████████████████████████████████████████████████████████████████████████
+          █                                                                              █
+          █   Welcome to Ubuntu Server (Automated Installation)                         █
+          █                                                                              █
+          █   This system was configured with autoinstall.                              █
+          █   Hardware info available at: /etc/hardware-info                           █
+          █                                                                              █
+          █   Default username: ubuntu                                                  █
+          █   Default password: ubuntu (PLEASE CHANGE!)                                █
+          █                                                                              █
+          ████████████████████████████████████████████████████████████████████████████████
+          
+        permissions: '0644'
