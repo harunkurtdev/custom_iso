@@ -1,0 +1,28 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    realname: User 
+    hostname: user-server
+    password: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
+    username: user
+  early-commands:
+    - echo -e "\e[31mEarly Commands Started...\e[0m"
+    - apt install unzip
+    - echo -e "\e[32mUnzip package installed for outzip file\e[0m"
+    - echo -e "\e[31mFiles will be organized...\e[0m"
+  packages:
+    - unzip
+    - net-tools
+  locale: en_US
+  keyboard:
+    layout: tr
+  user-data:
+    users:
+      - name: user
+        # password : 1
+        passwd: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1' 
+  late-commands:
+    - cp /cdrom/extras/user.sudoers /target/etc/sudoers.d/99-user-user
+    - curtin in-target --target=/target -- apt-get install -y unzip
+    - curtin in-target --target=/target -- mkdir /home/user/

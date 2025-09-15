@@ -1,0 +1,27 @@
+# Docker Server
+
+The main purpose is to quickly set up the system by preparing the user-data code independently from Cubic on the ISO file, and to quickly access the defined data by connecting the up2 task computer, which is set up via Docker, to the server and accessing the user-data and meta-data files.
+```bash
+sudo docker build -t docker_server_user . 
+```
+
+sudo docker run -it --network host --entrypoint /bin/bash docker_server_user
+
+
+docker network create --subnet=172.20.0.0/16 customnetwork
+
+```
+set timeout=5
+set default 0
+
+menuentry "Automatic User Installation - HTTP" {
+    set gfxpayload=keep
+    linux   /casper/vmlinuz quiet autoinstall "ds=nocloud-net;s=http://10.33.10.187:3007"  ---
+    initrd  /casper/initrd.lz
+}
+menuentry "Automatic User Installation" {
+    set gfxpayload=keep
+    linux   /casper/vmlinuz quiet autoinstall "ds=nocloud-net;s=file:///cdrom/preseed/"  ---
+    initrd  /casper/initrd.lz
+}
+```

@@ -1,0 +1,23 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    realname: User 
+    hostname: user-server
+    password: '$6$wdAcoXrU039hKYPd$508Qvbe7ObUnxoj15DRCkzC3qO7edjH0VV7BPNRDYK4QR8ofJaEEF2heacn0QgD.f8pO8SNp83XNdWG6tocBM1'
+    username: user
+  early-commands:
+    - echo dosyalar düzenleniyor
+    - echo -e "\e[31mDosyalar düzenleniyor...\e[0m"
+    - apt install unzip 
+    - echo -e "\e[32mOutzip dosyasi icin unzip indirildi\e[0m"
+  packages:
+    - unzip
+    - net-tools
+  keyboard:
+    layout: tr
+  user-data:
+    users:
+      - name: ubuntu
+        passwd: '$6$wdAcoXrU039hKYPd$508Qvbe7ObUnxoj15DRCkzC3qO7edjH0VV7BPNRDYK4QR8ofJaEEF2heacn0QgD.f8pO8SNp83XNdWG6tocBM1' 
+  
