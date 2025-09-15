@@ -1,28 +1,159 @@
 #cloud-config
+# ================================================
+# UBUNTU AUTOINSTALL CONFIGURATION
+# ================================================
+# Bu dosya Ubuntu 22.04 Server'ın otomatik kurulumu için
+# gerekli tüm ayarları içerir. Cloud-init formatında yazılmıştır.
+# 
+# Kaynak: https://github.com/canonical/subiquity/tree/main/examples/autoinstall
+# Dökümantasyon: https://ubuntu.com/server/docs/install/autoinstall
+# ================================================
+
 autoinstall:
-  version: 1
+  version: 1  # Autoinstall format versiyonu
+  
+  # ================================================
+  # SİSTEM KİMLİĞİ (System Identity)
+  # ================================================
+  # Her autoinstall dosyasında MUTLAKA bulunması gereken bölüm
   identity:
-    realname: User 
-    hostname: user-server
+    realname: User                              # Gerçek kullanıcı adı
+    hostname: user-server                       # Sistem hostname'i
+    username: user                              # Ana kullanıcı adı
+    # Şifre: "1" (openssl ile oluşturulmuş hash)
+    # Şifre oluşturma: openssl passwd -6 -salt $(openssl rand -hex 8) "1"
     password: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
-    username: user
+  
+  # ================================================
+  # ERKEN KOMUTLAR (Early Commands)
+  # ================================================
+  # Kurulum başlamadan ÖNCE çalışacak komutlar
+  # Sistem henüz chroot edilmemiş durumda
   early-commands:
-    - echo -e "\e[31mEarly Commands Started...\e[0m"
-    - apt install unzip
-    - echo -e "\e[32mUnzip package installed for outzip file\e[0m"
-    - echo -e "\e[31mFiles will be organized...\e[0m"
+    - echo -e "\e[31m🚀 Early Commands Started...\e[0m"
+    - echo -e "\e[32m📦 Unzip package installing...\e[0m"
+    - apt install unzip                         # Sıkıştırılmış dosyalar için
+    - echo -e "\e[32m✅ Unzip package installed\e[0m"
+    - echo -e "\e[33m📂 Files will be organized...\e[0m"
+  
+  # ================================================
+  # PAKET YÖNETİMİ (Package Management)
+  # ================================================
+  # Kurulum sırasında yüklenecek ek paketler
   packages:
-    - unzip
-    - net-tools
-  locale: en_US
+    - unzip                                     # Sıkıştırılmış dosya desteği
+    - net-tools                                 # Ağ araçları (ifconfig, netstat)
+    # - curl                                    # HTTP client
+    # - wget                                    # Dosya indirme
+    # - vim                                     # Gelişmiş text editör
+    # - htop                                    # Sistem monitörü
+    # - git                                     # Version control
+  
+  # ================================================
+  # DİL VE KLAVYE AYARLARI (Locale and Keyboard)
+  # ================================================
+  locale: en_US                                 # Sistem dili (İngilizce)
   keyboard:
-    layout: tr
+    layout: tr                                  # Klavye düzeni (Türkçe)
+    # Diğer seçenekler: en, de, fr, etc.
+  
+  # ================================================
+  # KULLANICI YÖNETİMİ (User Management)
+  # ================================================
+  # Bu bölüm isteğe bağlıdır - identity bölümü zaten ana kullanıcıyı tanımlar
   user-data:
     users:
-      - name: user
-        # password : 1
-        passwd: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1' 
+      - name: user                              # Kullanıcı adı
+        # Şifre: "1" (hash formatında)
+        passwd: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
+        # groups: [sudo, users, docker]          # Kullanıcı grupları
+        # shell: /bin/bash                       # Varsayılan shell
+        # ssh_authorized_keys:                   # SSH anahtarları
+        #   - "ssh-rsa AAAAB3NzaC1yc2EAAAA... user@hostname"
+  
+  # ================================================
+  # GEÇ KOMUTLAR (Late Commands)  
+  # ================================================
+  # Kurulum tamamlandıktan SONRA çalışacak komutlar
+  # Bu komutlar yeni yüklenen sistemde çalışır
   late-commands:
+    # Sudo yetkilerini ayarla
     - cp /cdrom/extras/user.sudoers /target/etc/sudoers.d/99-user-user
+    
+    # Hedef sisteme ek paketler yükle
     - curtin in-target --target=/target -- apt-get install -y unzip
-    - curtin in-target --target=/target -- mkdir /home/user/
+    
+    # Kullanıcı home dizinini oluştur
+    - curtin in-target --target=/target -- mkdir -p /home/user/
+    
+    # Özel script'leri kopyala (varsa)
+    # - cp /cdrom/extras/custom-setup.sh /target/home/user/
+    # - curtin in-target --target=/target -- chmod +x /home/user/custom-setup.sh
+    
+    # Sistem servislerini aktifleştir (örnek)
+    # - curtin in-target --target=/target -- systemctl enable ssh
+    # - curtin in-target --target=/target -- systemctl enable docker
+    
+    # Son durum mesajı
+    - echo -e "\e[32m🎉 Sistem kurulumu tamamlandı!\e[0m"
+
+# ================================================
+# İSTEĞE BAĞLI AYARLAR (Optional Settings)
+# ================================================
+# Bu ayarlar gerektiğinde açılabilir:
+
+# # Ağ konfigürasyonu (DHCP varsayılan)
+# network:
+#   version: 2
+#   ethernets:
+#     any:
+#       match:
+#         name: "e*"
+#       dhcp4: true
+
+# # Disk partitioning (otomatik varsayılan)
+# storage:
+#   layout:
+#     name: direct
+
+# # SSH server ayarları
+# ssh:
+#   install-server: true
+#   allow-pw: true
+
+# # Snap paketleri
+# snaps:
+#   - name: code
+#     classic: true
+
+# # APT ayarları
+# apt:
+#   primary:
+#     - arches: [amd64]
+#       uri: http://archive.ubuntu.com/ubuntu
+#   security:
+#     - arches: [amd64]
+#       uri: http://security.ubuntu.com/ubuntu
+
+# ================================================
+# NOTLAR VE İPUÇLARI
+# ================================================
+#
+# 🔐 Şifre Hash'i Oluşturma:
+# openssl passwd -6 -salt $(openssl rand -hex 16) "your_password"
+#
+# 🔍 Debugging:
+# - /var/log/installer/autoinstall-user-data dosyasını kontrol edin
+# - Kurulum sırasında Alt+F2 ile terminal açılabilir
+#
+# 📝 Özelleştirme:
+# - packages bölümüne ihtiyacınız olan paketleri ekleyin
+# - late-commands ile kurulum sonrası işlemler yapın
+# - early-commands ile kurulum öncesi hazırlık yapın
+#
+# ⚠️  Güvenlik:
+# - Production'da mutlaka güçlü şifre kullanın
+# - SSH key authentication kullanmayı düşünün
+# - Gereksiz paketleri yüklemeyin
+#
+# ================================================
