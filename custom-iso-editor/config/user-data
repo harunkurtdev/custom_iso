@@ -1,159 +1,98 @@
 #cloud-config
 # ================================================
-# UBUNTU AUTOINSTALL CONFIGURATION
+# UBUNTU SERVER AUTOINSTALL CONFIGURATION
 # ================================================
-# Bu dosya Ubuntu 22.04 Server'ın otomatik kurulumu için
-# gerekli tüm ayarları içerir. Cloud-init formatında yazılmıştır.
-# 
-# Kaynak: https://github.com/canonical/subiquity/tree/main/examples/autoinstall
-# Dökümantasyon: https://ubuntu.com/server/docs/install/autoinstall
+# This cloud-init configuration provides automated installation
+# for Ubuntu 22.04 Server with custom user setup and packages.
+#
+# Configuration sections:
+# - identity: User account and system identification
+# - early-commands: Pre-installation setup tasks
+# - packages: Additional software to install
+# - late-commands: Post-installation configuration
 # ================================================
 
 autoinstall:
-  version: 1  # Autoinstall format versiyonu
+  version: 1
   
   # ================================================
-  # SİSTEM KİMLİĞİ (System Identity)
+  # SYSTEM IDENTITY CONFIGURATION
   # ================================================
-  # Her autoinstall dosyasında MUTLAKA bulunması gereken bölüm
   identity:
-    realname: User                              # Gerçek kullanıcı adı
-    hostname: user-server                       # Sistem hostname'i
-    username: user                              # Ana kullanıcı adı
-    # Şifre: "1" (openssl ile oluşturulmuş hash)
-    # Şifre oluşturma: openssl passwd -6 -salt $(openssl rand -hex 8) "1"
+    realname: "Server Administrator"
+    hostname: ubuntu-server
+    # Default password: "1" (change for production use)
     password: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
+    username: user
   
   # ================================================
-  # ERKEN KOMUTLAR (Early Commands)
+  # PRE-INSTALLATION SETUP COMMANDS
   # ================================================
-  # Kurulum başlamadan ÖNCE çalışacak komutlar
-  # Sistem henüz chroot edilmemiş durumda
   early-commands:
-    - echo -e "\e[31m🚀 Early Commands Started...\e[0m"
-    - echo -e "\e[32m📦 Unzip package installing...\e[0m"
-    - apt install unzip                         # Sıkıştırılmış dosyalar için
-    - echo -e "\e[32m✅ Unzip package installed\e[0m"
-    - echo -e "\e[33m📂 Files will be organized...\e[0m"
+    - echo -e "\e[34m[SETUP] Starting early installation commands...\e[0m"
+    - apt update
+    - apt install -y unzip curl wget
+    - echo -e "\e[32m[SETUP] Essential packages installed\e[0m"
+    - echo -e "\e[34m[SETUP] Preparing system configuration...\e[0m"
   
   # ================================================
-  # PAKET YÖNETİMİ (Package Management)
+  # PACKAGE INSTALLATION LIST
   # ================================================
-  # Kurulum sırasında yüklenecek ek paketler
   packages:
-    - unzip                                     # Sıkıştırılmış dosya desteği
-    - net-tools                                 # Ağ araçları (ifconfig, netstat)
-    # - curl                                    # HTTP client
-    # - wget                                    # Dosya indirme
-    # - vim                                     # Gelişmiş text editör
-    # - htop                                    # Sistem monitörü
-    # - git                                     # Version control
+    - openssh-server    # SSH server for remote access
+    - unzip            # Archive extraction utility
+    - curl             # HTTP client tool
+    - wget             # Download utility
+    - net-tools        # Network configuration tools
+    - htop             # System monitoring
+    - vim              # Text editor
+    - git              # Version control
   
   # ================================================
-  # DİL VE KLAVYE AYARLARI (Locale and Keyboard)
+  # LOCALIZATION SETTINGS
   # ================================================
-  locale: en_US                                 # Sistem dili (İngilizce)
+  locale: en_US.UTF-8
   keyboard:
-    layout: tr                                  # Klavye düzeni (Türkçe)
-    # Diğer seçenekler: en, de, fr, etc.
+    layout: us          # Change to your preferred keyboard layout
   
   # ================================================
-  # KULLANICI YÖNETİMİ (User Management)
+  # USER ACCOUNT CONFIGURATION
   # ================================================
-  # Bu bölüm isteğe bağlıdır - identity bölümü zaten ana kullanıcıyı tanımlar
   user-data:
     users:
-      - name: user                              # Kullanıcı adı
-        # Şifre: "1" (hash formatında)
+      - name: user
+        # Default password: "1"
+        # Generate new password with: openssl passwd -6 -salt $(openssl rand -hex 8) "your_password"
         passwd: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
-        # groups: [sudo, users, docker]          # Kullanıcı grupları
-        # shell: /bin/bash                       # Varsayılan shell
-        # ssh_authorized_keys:                   # SSH anahtarları
-        #   - "ssh-rsa AAAAB3NzaC1yc2EAAAA... user@hostname"
+        shell: /bin/bash
+        groups: [sudo, users]
+        sudo: ALL=(ALL) NOPASSWD:ALL
   
   # ================================================
-  # GEÇ KOMUTLAR (Late Commands)  
+  # POST-INSTALLATION CONFIGURATION COMMANDS
   # ================================================
-  # Kurulum tamamlandıktan SONRA çalışacak komutlar
-  # Bu komutlar yeni yüklenen sistemde çalışır
   late-commands:
-    # Sudo yetkilerini ayarla
-    - cp /cdrom/extras/user.sudoers /target/etc/sudoers.d/99-user-user
+    - echo -e "\e[34m[CONFIG] Starting post-installation configuration...\e[0m"
     
-    # Hedef sisteme ek paketler yükle
-    - curtin in-target --target=/target -- apt-get install -y unzip
+    # Configure sudo access
+    - cp /cdrom/extras/user.sudoers /target/etc/sudoers.d/99-user-user || true
     
-    # Kullanıcı home dizinini oluştur
+    # Install additional packages in target system
+    - curtin in-target --target=/target -- apt-get update
+    - curtin in-target --target=/target -- apt-get install -y unzip curl wget
+    
+    # Create user home directory structure
     - curtin in-target --target=/target -- mkdir -p /home/user/
+    - curtin in-target --target=/target -- chown user:user /home/user/
     
-    # Özel script'leri kopyala (varsa)
-    # - cp /cdrom/extras/custom-setup.sh /target/home/user/
-    # - curtin in-target --target=/target -- chmod +x /home/user/custom-setup.sh
+    # Enable and configure SSH
+    - curtin in-target --target=/target -- systemctl enable ssh
     
-    # Sistem servislerini aktifleştir (örnek)
-    # - curtin in-target --target=/target -- systemctl enable ssh
-    # - curtin in-target --target=/target -- systemctl enable docker
+    # Set timezone (change as needed)
+    - curtin in-target --target=/target -- timedatectl set-timezone UTC
     
-    # Son durum mesajı
-    - echo -e "\e[32m🎉 Sistem kurulumu tamamlandı!\e[0m"
-
-# ================================================
-# İSTEĞE BAĞLI AYARLAR (Optional Settings)
-# ================================================
-# Bu ayarlar gerektiğinde açılabilir:
-
-# # Ağ konfigürasyonu (DHCP varsayılan)
-# network:
-#   version: 2
-#   ethernets:
-#     any:
-#       match:
-#         name: "e*"
-#       dhcp4: true
-
-# # Disk partitioning (otomatik varsayılan)
-# storage:
-#   layout:
-#     name: direct
-
-# # SSH server ayarları
-# ssh:
-#   install-server: true
-#   allow-pw: true
-
-# # Snap paketleri
-# snaps:
-#   - name: code
-#     classic: true
-
-# # APT ayarları
-# apt:
-#   primary:
-#     - arches: [amd64]
-#       uri: http://archive.ubuntu.com/ubuntu
-#   security:
-#     - arches: [amd64]
-#       uri: http://security.ubuntu.com/ubuntu
-
-# ================================================
-# NOTLAR VE İPUÇLARI
-# ================================================
-#
-# 🔐 Şifre Hash'i Oluşturma:
-# openssl passwd -6 -salt $(openssl rand -hex 16) "your_password"
-#
-# 🔍 Debugging:
-# - /var/log/installer/autoinstall-user-data dosyasını kontrol edin
-# - Kurulum sırasında Alt+F2 ile terminal açılabilir
-#
-# 📝 Özelleştirme:
-# - packages bölümüne ihtiyacınız olan paketleri ekleyin
-# - late-commands ile kurulum sonrası işlemler yapın
-# - early-commands ile kurulum öncesi hazırlık yapın
-#
-# ⚠️  Güvenlik:
-# - Production'da mutlaka güçlü şifre kullanın
-# - SSH key authentication kullanmayı düşünün
-# - Gereksiz paketleri yüklemeyin
-#
-# ================================================
+    # Final system update
+    - curtin in-target --target=/target -- apt-get update && apt-get upgrade -y
+    
+    - echo -e "\e[32m[CONFIG] Post-installation configuration completed\e[0m"
+    - echo -e "\e[36m[INFO] System ready for first boot\e[0m"
