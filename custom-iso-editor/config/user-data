@@ -1,28 +1,98 @@
 #cloud-config
+# ================================================
+# UBUNTU SERVER AUTOINSTALL CONFIGURATION
+# ================================================
+# This cloud-init configuration provides automated installation
+# for Ubuntu 22.04 Server with custom user setup and packages.
+#
+# Configuration sections:
+# - identity: User account and system identification
+# - early-commands: Pre-installation setup tasks
+# - packages: Additional software to install
+# - late-commands: Post-installation configuration
+# ================================================
+
 autoinstall:
   version: 1
+  
+  # ================================================
+  # SYSTEM IDENTITY CONFIGURATION
+  # ================================================
   identity:
-    realname: User 
-    hostname: user-server
+    realname: "Server Administrator"
+    hostname: ubuntu-server
+    # Default password: "1" (change for production use)
     password: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
     username: user
+  
+  # ================================================
+  # PRE-INSTALLATION SETUP COMMANDS
+  # ================================================
   early-commands:
-    - echo -e "\e[31mEarly Commands Started...\e[0m"
-    - apt install unzip
-    - echo -e "\e[32mUnzip package installed for outzip file\e[0m"
-    - echo -e "\e[31mFiles will be organized...\e[0m"
+    - echo -e "\e[34m[SETUP] Starting early installation commands...\e[0m"
+    - apt update
+    - apt install -y unzip curl wget
+    - echo -e "\e[32m[SETUP] Essential packages installed\e[0m"
+    - echo -e "\e[34m[SETUP] Preparing system configuration...\e[0m"
+  
+  # ================================================
+  # PACKAGE INSTALLATION LIST
+  # ================================================
   packages:
-    - unzip
-    - net-tools
-  locale: en_US
+    - openssh-server    # SSH server for remote access
+    - unzip            # Archive extraction utility
+    - curl             # HTTP client tool
+    - wget             # Download utility
+    - net-tools        # Network configuration tools
+    - htop             # System monitoring
+    - vim              # Text editor
+    - git              # Version control
+  
+  # ================================================
+  # LOCALIZATION SETTINGS
+  # ================================================
+  locale: en_US.UTF-8
   keyboard:
-    layout: tr
+    layout: us          # Change to your preferred keyboard layout
+  
+  # ================================================
+  # USER ACCOUNT CONFIGURATION
+  # ================================================
   user-data:
     users:
       - name: user
-        # password : 1
-        passwd: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1' 
+        # Default password: "1"
+        # Generate new password with: openssl passwd -6 -salt $(openssl rand -hex 8) "your_password"
+        passwd: '$6$74c2fbdbb4ca6c77$2IVdUExCZ9sn6KakQ3HgqYE0xCKydWY8gPGZEYOX7gn8vOqPYopRfqdqDYJyyGvx2qJ40lOyV2eaSt4xQ1F0I1'
+        shell: /bin/bash
+        groups: [sudo, users]
+        sudo: ALL=(ALL) NOPASSWD:ALL
+  
+  # ================================================
+  # POST-INSTALLATION CONFIGURATION COMMANDS
+  # ================================================
   late-commands:
-    - cp /cdrom/extras/user.sudoers /target/etc/sudoers.d/99-user-user
-    - curtin in-target --target=/target -- apt-get install -y unzip
-    - curtin in-target --target=/target -- mkdir /home/user/
+    - echo -e "\e[34m[CONFIG] Starting post-installation configuration...\e[0m"
+    
+    # Configure sudo access
+    - cp /cdrom/extras/user.sudoers /target/etc/sudoers.d/99-user-user || true
+    
+    # Install additional packages in target system
+    - curtin in-target --target=/target -- apt-get update
+    - curtin in-target --target=/target -- apt-get install -y unzip curl wget
+    
+    # Create user home directory structure
+    - curtin in-target --target=/target -- mkdir -p /home/user/
+    - curtin in-target --target=/target -- chown user:user /home/user/
+    
+    # Enable and configure SSH
+    - curtin in-target --target=/target -- systemctl enable ssh
+    
+    # Set timezone (change as needed)
+    - curtin in-target --target=/target -- timedatectl set-timezone UTC
+    
+    # Final system update
+    - curtin in-target --target=/target -- apt-get update && apt-get upgrade -y
+    
+    - echo -e "\e[32m[CONFIG] Post-installation configuration completed\e[0m"
+    - echo -e "\e[36m[INFO] System ready for first boot\e[0m"
